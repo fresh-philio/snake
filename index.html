@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ebe8f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12101a" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Snake">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px system-ui,sans-serif}
+[hidden]{display:none!important}
+</style>
+<title>Phil's fantastic Snake</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/* Layout: eine Spalte. Kopf mit Punkten und Rekord, Buttonleiste, Spielfeld im Seitenverhältnis 15:19,
+   darunter optional ein Steuerkreuz. Das Feld wird aus Breite und Resthöhe des Bildschirms berechnet. */
+:root{
+  --bg:#ebe8f1;
+  --ink:#231a33;
+  --ink-soft:#5e5473;
+  --f1:#f3f0f8;
+  --f2:#e7e2f0;
+  --snake:#6a3fa6;
+  --snake-hi:#a77fdc;
+  --eye:#fffdf5;
+  --apple:#5fb02c;
+  --leaf:#1f6b2a;
+  --ctl:#f7f4fb;
+  --ctl-ink:#231a33;
+  --ctl-line:rgba(35,26,51,.22);
+  --accent:#e9a21c;
+  --accent-ink:#241803;
+  --scrim:rgba(20,12,34,.62);
+  --panel:#f7f4fb;
+  --head:'Bricolage Grotesque', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono:'DM Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12101a;
+    --ink:#ece8f5;
+    --ink-soft:#a49bb8;
+    --f1:#1e1a2b;
+    --f2:#191524;
+    --snake:#b388ff;
+    --snake-hi:#dcc6ff;
+    --eye:#12101a;
+    --apple:#7ddc4a;
+    --leaf:#3fa34d;
+    --ctl:#251f35;
+    --ctl-ink:#ece8f5;
+    --ctl-line:rgba(236,232,245,.2);
+    --accent:#f2b23a;
+    --scrim:rgba(8,6,14,.7);
+    --panel:#1c1829;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12101a;
+  --ink:#ece8f5;
+  --ink-soft:#a49bb8;
+  --f1:#1e1a2b;
+  --f2:#191524;
+  --snake:#b388ff;
+  --snake-hi:#dcc6ff;
+  --eye:#12101a;
+  --apple:#7ddc4a;
+  --leaf:#3fa34d;
+  --ctl:#251f35;
+  --ctl-ink:#ece8f5;
+  --ctl-line:rgba(236,232,245,.2);
+  --accent:#f2b23a;
+  --scrim:rgba(8,6,14,.7);
+  --panel:#1c1829;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{min-height:100%}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--head);
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:12px 18px;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;
+  user-select:none;
+  overscroll-behavior:none;
+}
+.app{max-width:600px;margin:0 auto;--chrome:240px}
+.app.dpad{--chrome:372px}
+
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.top h1{margin:0;font-weight:800;font-size:25px;line-height:1.05;letter-spacing:-.02em;text-wrap:balance;min-width:0}
+.stats{display:flex;gap:18px;font-family:var(--mono);font-size:13px;color:var(--ink-soft)}
+.stats span{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.stats b{font-size:22px;line-height:1;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+
+.bar{display:flex;gap:8px;margin-top:12px}
+button{
+  font:600 14px/1 var(--head);
+  min-height:42px;
+  padding:0 14px;
+  border-radius:10px;
+  border:1px solid var(--ctl-line);
+  background:var(--ctl);
+  color:var(--ctl-ink);
+  cursor:pointer;
+}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.go{background:var(--accent);border-color:transparent;color:var(--accent-ink)}
+
+.stage{
+  position:relative;
+  margin:12px auto 0;
+  width:max(220px, min(100%, 560px, calc((100svh - var(--chrome)) * 15 / 19)));
+  touch-action:none;
+}
+canvas{
+  display:block;
+  width:100%;
+  aspect-ratio:15 / 19;
+  border-radius:14px;
+  box-shadow:0 0 0 2px var(--ctl-line);
+  touch-action:none;
+}
+.ov{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  text-align:center;
+  padding:20px;
+  border-radius:14px;
+  background:var(--scrim);
+  color:#f3f8f5;
+}
+.ov h2{margin:0;font-weight:800;font-size:28px;line-height:1.1;text-wrap:balance}
+.ov p{margin:0;font-size:15px;color:rgba(243,248,245,.82);max-width:26ch;line-height:1.4}
+.ov button{margin-top:6px;min-width:150px}
+
+.pad{
+  display:grid;
+  grid-template-columns:repeat(3,64px);
+  grid-template-rows:repeat(2,64px);
+  gap:8px;
+  justify-content:center;
+  margin-top:14px;
+}
+.pad button{min-height:0;padding:0;font-size:22px;border-radius:14px;touch-action:manipulation}
+.pad .u{grid-column:2;grid-row:1}
+.pad .l{grid-column:1;grid-row:2}
+.pad .d{grid-column:2;grid-row:2}
+.pad .r{grid-column:3;grid-row:2}
+
+.hint{margin:12px auto 0;font-size:13px;line-height:1.5;color:var(--ink-soft);text-align:center;max-width:44ch}
+
+.win{
+  position:fixed;inset:0;z-index:50;
+  display:flex;align-items:center;justify-content:center;
+  padding:24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px));
+  background:var(--scrim);
+}
+.card{
+  background:var(--panel);color:var(--ink);
+  border:1px solid var(--ctl-line);
+  border-radius:16px;
+  padding:24px 22px 22px;
+  width:min(100%,360px);
+  box-shadow:0 18px 40px rgba(0,0,0,.35);
+}
+.card h2{margin:0;font-weight:800;font-size:26px;line-height:1.1}
+.grp{margin:18px 0 0}
+.lbl{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;padding:0 6px}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:transparent;color:var(--accent-ink)}
+.note{margin:18px 0 0;font-size:12px;line-height:1.45;color:var(--ink-soft)}
+.card .go{margin-top:18px;width:100%}
+@media (prefers-reduced-motion:no-preference){
+  .card{animation:pop .22s ease-out}
+  @keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+}
+</style>
+</head>
+<body>
+
+
+<div class="app" id="app">
+  <header class="top">
+    <h1>Phil's fantastic Snake</h1>
+    <div class="stats">
+      <span>Punkte<b id="score">0</b></span>
+      <span>Rekord<b id="best">0</b></span>
+    </div>
+  </header>
+
+  <div class="bar">
+    <button id="bPause" type="button">Pause</button>
+    <button id="bNew" type="button">Neu</button>
+    <button id="bSet" type="button">Einstellungen</button>
+  </div>
+
+  <div class="stage" id="stage">
+    <canvas id="cv" aria-label="Spielfeld"></canvas>
+    <div class="ov" id="ov">
+      <h2 id="ovH">Phil's fantastic Snake</h2>
+      <p id="ovP">Wische in die Richtung, in die die Schlange laufen soll.</p>
+      <button id="ovB" type="button" class="go">Start</button>
+    </div>
+  </div>
+
+  <div class="pad" id="pad" hidden>
+    <button class="u" type="button" data-d="u" aria-label="Hoch">▲</button>
+    <button class="l" type="button" data-d="l" aria-label="Links">◀</button>
+    <button class="d" type="button" data-d="d" aria-label="Runter">▼</button>
+    <button class="r" type="button" data-d="r" aria-label="Rechts">▶</button>
+  </div>
+
+  <p class="hint" id="hint">Wischen auf dem Feld steuert die Schlange. Am Computer gehen Pfeiltasten oder WASD, die Leertaste pausiert.</p>
+</div>
+
+<div class="win" id="set" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="setH">
+    <h2 id="setH">Einstellungen</h2>
+    <div class="grp">
+      <div class="lbl">Tempo</div>
+      <div class="seg" id="segTempo">
+        <button type="button" data-v="slow" aria-pressed="false">Langsam</button>
+        <button type="button" data-v="mid" aria-pressed="true">Mittel</button>
+        <button type="button" data-v="fast" aria-pressed="false">Schnell</button>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="lbl">Spielfeldrand</div>
+      <div class="seg" id="segWalls">
+        <button type="button" data-v="solid" aria-pressed="true">Wand</button>
+        <button type="button" data-v="wrap" aria-pressed="false">Durchlässig</button>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="lbl">Steuerung</div>
+      <div class="seg" id="segCtrl">
+        <button type="button" data-v="swipe" aria-pressed="true">Wischen</button>
+        <button type="button" data-v="pad" aria-pressed="false">Steuerkreuz</button>
+      </div>
+    </div>
+    <p class="note">Tempo und Spielfeldrand starten ein neues Spiel. Der Rekord wird für jede Kombination einzeln gespeichert.</p>
+    <button id="setOk" type="button" class="go">Fertig</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var COLS=15, ROWS=19, KEY='snake-v1';
+  var BASE={slow:175, mid:135, fast:100};
+  var DIRS={u:{x:0,y:-1}, d:{x:0,y:1}, l:{x:-1,y:0}, r:{x:1,y:0}};
+
+  var cfg={tempo:'mid', walls:'solid', ctrl:'swipe'};
+  var bestMap={};
+
+  var snake, prev, dir, queue, apple, score, state, acc, lastTs, raf, C={};
+
+  var $app=document.getElementById('app');
+  var $stage=document.getElementById('stage');
+  var $cv=document.getElementById('cv');
+  var ctx=$cv.getContext('2d');
+  var $score=document.getElementById('score');
+  var $best=document.getElementById('best');
+  var $ov=document.getElementById('ov');
+  var $ovH=document.getElementById('ovH');
+  var $ovP=document.getElementById('ovP');
+  var $ovB=document.getElementById('ovB');
+  var $pause=document.getElementById('bPause');
+  var $new=document.getElementById('bNew');
+  var $setBtn=document.getElementById('bSet');
+  var $set=document.getElementById('set');
+  var $setOk=document.getElementById('setOk');
+  var $pad=document.getElementById('pad');
+  var $hint=document.getElementById('hint');
+
+  /* ---------- Speicher ---------- */
+  function save(){
+    try{ localStorage.setItem(KEY, JSON.stringify({cfg:cfg,best:bestMap})) }catch(e){}
+  }
+  function load(){
+    try{
+      var d=JSON.parse(localStorage.getItem(KEY)||'null');
+      if(!d) return;
+      if(d.cfg){
+        if(BASE[d.cfg.tempo]) cfg.tempo=d.cfg.tempo;
+        if(d.cfg.walls==='wrap'||d.cfg.walls==='solid') cfg.walls=d.cfg.walls;
+        if(d.cfg.ctrl==='pad'||d.cfg.ctrl==='swipe') cfg.ctrl=d.cfg.ctrl;
+      }
+      if(d.best && typeof d.best==='object') bestMap=d.best;
+    }catch(e){}
+  }
+  function bestKey(){return cfg.tempo+'-'+cfg.walls}
+  function getBest(){return bestMap[bestKey()]|0}
+
+  /* ---------- Farben aus dem Theme ---------- */
+  function readColors(){
+    var cs=getComputedStyle(document.documentElement);
+    ['f1','f2','snake','snake-hi','eye','apple','leaf'].forEach(function(n){
+      C[n]=cs.getPropertyValue('--'+n).trim();
+    });
+    if(state) draw(state==='running'?acc/stepMs():1);
+  }
+
+  /* ---------- Spielzustand ---------- */
+  function stepMs(){ return Math.max(55, BASE[cfg.tempo]-score*1.6) }
+
+  function reset(){
+    var cx=Math.floor(COLS/2), cy=Math.floor(ROWS/2);
+    snake=[{x:cx,y:cy},{x:cx-1,y:cy},{x:cx-2,y:cy}];
+    prev=snake.map(function(s){return {x:s.x,y:s.y}});
+    dir={x:1,y:0}; queue=[];
+    score=0; acc=0; state='ready';
+    spawnApple();
+    if(raf){cancelAnimationFrame(raf); raf=0}
+    updateUI(); draw(1);
+  }
+
+  function spawnApple(){
+    var free=[], taken={}, i;
+    for(i=0;i<snake.length;i++) taken[snake[i].x+','+snake[i].y]=1;
+    for(var y=0;y<ROWS;y++) for(var x=0;x<COLS;x++) if(!taken[x+','+y]) free.push({x:x,y:y});
+    apple=free.length?free[Math.floor(Math.random()*free.length)]:null;
+  }
+
+  function setDir(dx,dy){
+    if(state==='over') return;
+    var ref=queue.length?queue[queue.length-1]:dir;
+    if(dx===ref.x && dy===ref.y) return;
+    if(dx===-ref.x && dy===-ref.y) return;
+    if(queue.length<2) queue.push({x:dx,y:dy});
+    if(state==='ready'||state==='paused') start();
+  }
+
+  function start(){
+    if(state==='over') reset();
+    if(state==='running') return;
+    state='running'; lastTs=performance.now();
+    updateUI();
+    if(!raf) raf=requestAnimationFrame(frame);
+  }
+  function pause(){
+    if(state!=='running') return;
+    state='paused'; updateUI(); draw(1);
+  }
+  function toggle(){
+    if(state==='running') pause();
+    else if(state==='paused'||state==='ready') start();
+  }
+
+  function tick(){
+    if(queue.length) dir=queue.shift();
+    var h=snake[0], nx=h.x+dir.x, ny=h.y+dir.y;
+    if(cfg.walls==='wrap'){
+      nx=(nx+COLS)%COLS; ny=(ny+ROWS)%ROWS;
+    } else if(nx<0||ny<0||nx>=COLS||ny>=ROWS){
+      return die();
+    }
+    var eat=apple && nx===apple.x && ny===apple.y;
+    var lim=eat?snake.length:snake.length-1;
+    for(var i=0;i<lim;i++){
+      if(snake[i].x===nx && snake[i].y===ny) return die();
+    }
+    var old=snake;
+    snake=[{x:nx,y:ny}].concat(old);
+    if(!eat) snake.pop();
+    prev=snake.map(function(s,i){
+      var o=old[Math.min(i,old.length-1)];
+      return {x:o.x,y:o.y};
+    });
+    if(eat){
+      score++;
+      spawnApple();
+      buzz(12);
+      var b=getBest();
+      if(score>b){ bestMap[bestKey()]=score }
+      updateUI();
+      if(!apple) win();
+    }
+  }
+
+  function buzz(ms){ try{ if(navigator.vibrate) navigator.vibrate(ms) }catch(e){} }
+
+  function die(){
+    state='over'; buzz(90); save(); updateUI();
+  }
+  function win(){
+    state='over'; save(); updateUI();
+  }
+
+  function frame(ts){
+    raf=0;
+    if(state!=='running') return;
+    var dt=Math.max(0,Math.min(ts-lastTs,100)); lastTs=ts;
+    acc+=dt;
+    var step=stepMs();
+    while(acc>=step && state==='running'){ tick(); acc-=step; step=stepMs(); }
+    draw(state==='running'?acc/step:1);
+    if(state==='running') raf=requestAnimationFrame(frame);
+  }
+
+  /* ---------- Oberfläche ---------- */
+  function updateUI(){
+    $score.textContent=score;
+    $best.textContent=Math.max(getBest(),score);
+    $pause.textContent=state==='paused'?'Weiter':'Pause';
+    $pause.disabled=(state==='ready'||state==='over');
+    $pause.style.opacity=$pause.disabled?'.45':'';
+    $ov.hidden=(state==='running');
+    if(state==='ready'){
+      $ovH.textContent="Phil's fantastic Snake";
+      $ovP.textContent=cfg.ctrl==='pad'?'Tippe auf Start und steuere mit dem Kreuz unter dem Feld.':'Wische in die Richtung, in die die Schlange laufen soll.';
+      $ovB.textContent='Start';
+    } else if(state==='paused'){
+      $ovH.textContent='Pause';
+      $ovP.textContent='Tippen oder wischen, um weiterzumachen.';
+      $ovB.textContent='Weiter';
+    } else if(state==='over'){
+      var rec=score>0 && score>=getBest() && bestMap[bestKey()]===score;
+      $ovH.textContent=apple?'Aus!':'Geschafft!';
+      $ovP.textContent=score+(score===1?' Punkt':' Punkte')+(rec?' – neuer Rekord!':'');
+      $ovB.textContent='Nochmal';
+    }
+    $app.classList.toggle('dpad',cfg.ctrl==='pad');
+    $pad.hidden=cfg.ctrl!=='pad';
+    $hint.hidden=cfg.ctrl==='pad';
+  }
+
+  /* ---------- Zeichnen ---------- */
+  function resize(){
+    var dpr=Math.min(window.devicePixelRatio||1,3);
+    var w=$cv.clientWidth, h=$cv.clientHeight;
+    if(!w||!h) return;
+    var pw=Math.round(w*dpr), ph=Math.round(h*dpr);
+    if($cv.width!==pw||$cv.height!==ph){ $cv.width=pw; $cv.height=ph }
+    if(state) draw(state==='running'?acc/stepMs():1);
+  }
+
+  function lerpPt(a,b,t){
+    if(Math.abs(b.x-a.x)>1.5||Math.abs(b.y-a.y)>1.5) return {x:b.x,y:b.y};
+    return {x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t};
+  }
+
+  function draw(t){
+    var W=$cv.width, H=$cv.height;
+    if(!W||!H) return;
+    var cell=W/COLS, x, y, i;
+    ctx.clearRect(0,0,W,H);
+
+    for(y=0;y<ROWS;y++) for(x=0;x<COLS;x++){
+      ctx.fillStyle=((x+y)&1)?C.f2:C.f1;
+      ctx.fillRect(x*cell,y*cell,Math.ceil(cell),Math.ceil(cell));
+    }
+
+    if(apple){
+      var ax=(apple.x+.5)*cell, ay=(apple.y+.58)*cell, r=cell*.4;
+      ctx.fillStyle='rgba(0,0,0,.18)';
+      ctx.beginPath(); ctx.ellipse(ax,ay+r*.95,r*.85,r*.3,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=C.apple;
+      ctx.beginPath(); ctx.arc(ax,ay,r,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.35)';
+      ctx.beginPath(); ctx.ellipse(ax-r*.35,ay-r*.4,r*.28,r*.18,-.6,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=C.leaf;
+      ctx.beginPath(); ctx.ellipse(ax+r*.35,ay-r*1.05,r*.42,r*.2,-.5,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle=C.leaf; ctx.lineWidth=cell*.06; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(ax,ay-r*.8); ctx.lineTo(ax+r*.05,ay-r*1.1); ctx.stroke();
+    }
+
+    var pts=[];
+    for(i=0;i<snake.length;i++){
+      var p=lerpPt(prev[i]||snake[i],snake[i],t);
+      pts.push({x:(p.x+.5)*cell,y:(p.y+.5)*cell});
+    }
+    if(state==='over') ctx.globalAlpha=.6;
+
+    function trace(){
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x,pts[0].y);
+      for(var k=1;k<pts.length;k++){
+        var a=pts[k-1], b=pts[k];
+        if(Math.abs(a.x-b.x)>cell*1.5||Math.abs(a.y-b.y)>cell*1.5) ctx.moveTo(b.x,b.y);
+        else ctx.lineTo(b.x,b.y);
+      }
+    }
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=cell*.84;
+    ctx.save(); ctx.translate(0,cell*.06); trace(); ctx.stroke(); ctx.restore();
+    ctx.strokeStyle=C.snake; ctx.lineWidth=cell*.8; trace(); ctx.stroke();
+    ctx.strokeStyle=C['snake-hi']; ctx.lineWidth=cell*.36; ctx.globalAlpha=(state==='over'?.6:1)*.55;
+    trace(); ctx.stroke();
+    ctx.globalAlpha=state==='over'?.6:1;
+
+    // Kopf mit Augen
+    var hd=pts[0], d=dir;
+    var fx=d.x, fy=d.y, sx=-d.y, sy=d.x;
+    var er=cell*.13, off=cell*.2, fw=cell*.12;
+    ctx.fillStyle=C.eye;
+    [-1,1].forEach(function(s){
+      ctx.beginPath();
+      ctx.arc(hd.x+fx*fw+sx*off*s, hd.y+fy*fw+sy*off*s, er, 0, Math.PI*2);
+      ctx.fill();
+    });
+    ctx.fillStyle=C.snake;
+    [-1,1].forEach(function(s){
+      ctx.beginPath();
+      ctx.arc(hd.x+fx*(fw+er*.35)+sx*off*s, hd.y+fy*(fw+er*.35)+sy*off*s, er*.5, 0, Math.PI*2);
+      ctx.fill();
+    });
+    ctx.globalAlpha=1;
+  }
+
+  /* ---------- Eingabe ---------- */
+  var sw=null;
+  $stage.addEventListener('pointerdown',function(e){
+    if(e.target.closest('.ov')) return;
+    sw={x:e.clientX,y:e.clientY,id:e.pointerId,moved:false,t:performance.now()};
+    try{ $stage.setPointerCapture(e.pointerId) }catch(_){}
+  });
+  $stage.addEventListener('pointermove',function(e){
+    if(!sw||e.pointerId!==sw.id) return;
+    var dx=e.clientX-sw.x, dy=e.clientY-sw.y;
+    if(Math.max(Math.abs(dx),Math.abs(dy))<22) return;
+    sw.moved=true;
+    if(Math.abs(dx)>Math.abs(dy)) setDir(dx>0?1:-1,0); else setDir(0,dy>0?1:-1);
+    sw.x=e.clientX; sw.y=e.clientY;
+  });
+  function swEnd(e){
+    if(!sw||e.pointerId!==sw.id) return;
+    var tap=!sw.moved && performance.now()-sw.t<300;
+    sw=null;
+    if(tap && (state==='paused'||state==='ready')) start();
+  }
+  $stage.addEventListener('pointerup',swEnd);
+  $stage.addEventListener('pointercancel',function(e){ if(sw&&e.pointerId===sw.id) sw=null });
+
+  document.addEventListener('keydown',function(e){
+    var k=e.key;
+    if(k==='Escape'){ closeSet(); return }
+    if(!$set.hidden) return;
+    var m={ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r',w:'u',s:'d',a:'l',d:'r',W:'u',S:'d',A:'l',D:'r'}[k];
+    if(m){ e.preventDefault(); setDir(DIRS[m].x,DIRS[m].y); return }
+    if(k===' '||k==='p'||k==='P'){ e.preventDefault(); toggle(); return }
+    if(k==='Enter'){ e.preventDefault(); if(state==='over') { reset(); start() } else start() }
+  });
+
+  $pad.addEventListener('pointerdown',function(e){
+    var b=e.target.closest('button[data-d]'); if(!b) return;
+    e.preventDefault();
+    var d=DIRS[b.getAttribute('data-d')];
+    setDir(d.x,d.y);
+  });
+
+  $ovB.addEventListener('click',function(){
+    if(state==='over'){ reset(); start() } else start();
+  });
+  $ov.addEventListener('pointerdown',function(e){ e.stopPropagation() });
+  $pause.addEventListener('click',toggle);
+  $new.addEventListener('click',function(){ reset() });
+
+  document.addEventListener('visibilitychange',function(){ if(document.hidden) pause() });
+  window.addEventListener('pagehide',function(){ pause(); save() });
+
+  /* ---------- Einstellungen ---------- */
+  var $sT=document.getElementById('segTempo'), $sW=document.getElementById('segWalls'), $sC=document.getElementById('segCtrl');
+  function syncSeg(){
+    [[$sT,cfg.tempo],[$sW,cfg.walls],[$sC,cfg.ctrl]].forEach(function(p){
+      [].forEach.call(p[0].querySelectorAll('button'),function(b){
+        b.setAttribute('aria-pressed',b.getAttribute('data-v')===p[1]?'true':'false');
+      });
+    });
+  }
+  function openSet(){ pause(); syncSeg(); $set.hidden=false }
+  function closeSet(){ $set.hidden=true }
+  $setBtn.addEventListener('click',openSet);
+  $setOk.addEventListener('click',closeSet);
+  $set.addEventListener('click',function(e){ if(e.target===$set) closeSet() });
+  function segHandler(seg,key,restart){
+    seg.addEventListener('click',function(e){
+      var b=e.target.closest('button'); if(!b) return;
+      cfg[key]=b.getAttribute('data-v'); save(); syncSeg();
+      if(restart) reset(); else updateUI();
+      requestAnimationFrame(resize);
+    });
+  }
+  segHandler($sT,'tempo',true);
+  segHandler($sW,'walls',true);
+  segHandler($sC,'ctrl',false);
+
+  /* ---------- Start ---------- */
+  load();
+  readColors();
+  try{
+    var mq=window.matchMedia('(prefers-color-scheme: dark)');
+    (mq.addEventListener?mq.addEventListener.bind(mq,'change'):mq.addListener.bind(mq))(readColors);
+  }catch(e){}
+  try{ new MutationObserver(readColors).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']}) }catch(e){}
+  try{ new ResizeObserver(resize).observe($cv) }catch(e){ window.addEventListener('resize',resize) }
+  reset();
+  resize();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+})();
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});
+}
+</script>
+</body>
+</html>
